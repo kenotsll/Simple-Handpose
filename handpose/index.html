@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Pose Detection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: black;
+        }
+        video {
+            position: absolute;
+            transform: scaleX(-1); /* Mirroring */
+            opacity: 0.8;
+        }
+        canvas {
+            position: absolute;
+            transform: scaleX(-1);
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        async function main() {
+            const video = document.getElementById("video");
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+
+            // Atur video dari kamera
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+
+            // Tunggu video siap
+            await new Promise((resolve) => video.onloadedmetadata = resolve);
+            video.width = video.videoWidth;
+            video.height = video.videoHeight;
+            canvas.width = video.width;
+            canvas.height = video.height;
+
+            // Load model hand pose detection
+            const model = await handPoseDetection.createDetector(
+                handPoseDetection.SupportedModels.MediaPipeHands,
+                { runtime: "mediapipe", solutionPath: "https://cdn.jsdelivr.net/npm/@mediapipe/hands" }
+            );
+
+            // Gambar koneksi antar titik tangan
+            const HAND_CONNECTIONS = [
+                [0, 1], [1, 2], [2, 3], [3, 4],    // Ibu jari
+                [5, 6], [6, 7], [7, 8],            // Jari telunjuk
+                [9, 10], [10, 11], [11, 12],       // Jari tengah
+                [13, 14], [14, 15], [15, 16],      // Jari manis
+                [17, 18], [18, 19], [19, 20],      // Jari kelingking
+                [0, 5], [5, 9], [9, 13], [13, 17], [17, 0] // Telapak tangan
+            ];
+
+            async function detectHands() {
+                const hands = await model.estimateHands(video);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                hands.forEach(hand => {
+                    const keypoints = hand.keypoints;
+
+                    // Gambar titik-titik tangan
+                    keypoints.forEach(point => {
+                        ctx.beginPath();
+                        ctx.arc(point.x, point.y, 5, 0, 2 * Math.PI);
+                        ctx.fillStyle = "red";
+                        ctx.fill();
+                    });
+
+                    // Gambar rangka tangan (garis penghubung)
+                    ctx.strokeStyle = "cyan";
+                    ctx.lineWidth = 2;
+                    HAND_CONNECTIONS.forEach(([start, end]) => {
+                        ctx.beginPath();
+                        ctx.moveTo(keypoints[start].x, keypoints[start].y);
+                        ctx.lineTo(keypoints[end].x, keypoints[end].y);
+                        ctx.stroke();
+                    });
+                });
+
+                requestAnimationFrame(detectHands);
+            }
+
+            detectHands();
+        }
+
+        main();
+    </script>
+</body>
+</html>
